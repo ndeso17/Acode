@@ -1,15 +1,21 @@
 import "./style.scss";
 import toast from "components/toast";
 import confirm from "dialogs/confirm";
-import generatePluginContext, { connect as connectPluginContext } from "lib/pluginContext";
+import generatePluginContext, {
+	connect as connectPluginContext,
+} from "lib/pluginContext";
 import webview, { WebViewEvents } from "lib/webview";
-import { createSnapgentBackground } from "./background";
+import {
+	clientServers,
+	clientTools,
+	createSnapgentBackground,
+} from "./background";
 import { SnapgentBridge } from "./bridge";
 import { getProviderById, isTrustedProviderUrl, PROVIDERS } from "./providers";
 import {
 	DEFAULT_SETTINGS,
-	STORAGE_KEY,
 	loadPublicSettings,
+	STORAGE_KEY,
 	savePublicSettings,
 } from "./settings";
 
@@ -80,7 +86,16 @@ export function initSnapgentAgent(container) {
 		"snapgent-note",
 		"Sign in inside the provider window. Mutating MCP tools still require your approval.",
 	);
-	body.append(intro, providerLabel, openButton, reconnectButton, bridgeLabel, tokenLabel, saveButton, note);
+	body.append(
+		intro,
+		providerLabel,
+		openButton,
+		reconnectButton,
+		bridgeLabel,
+		tokenLabel,
+		saveButton,
+		note,
+	);
 	container.replaceChildren(header, body);
 
 	function updateStatus(next) {
@@ -98,8 +113,8 @@ export function initSnapgentAgent(container) {
 			transport: "websocket",
 			mcpAlive: Boolean(bridge?.status.connected),
 			bridgeVersion: bridge?.status.bridgeVersion || "",
-			tools: bridge?.catalogue || [],
-			servers: bridge?.status.servers || [],
+			tools: clientTools(bridge?.catalogue),
+			servers: clientServers(bridge?.status.servers),
 			lastError: bridge?.status.error || "",
 		};
 	}
@@ -108,7 +123,9 @@ export function initSnapgentAgent(container) {
 		const view = providerView;
 		if (!view || view.isDestroyed) return;
 		try {
-			view.postMessage({ kind: "status", status: statusObject() }).catch(() => {});
+			view
+				.postMessage({ kind: "status", status: statusObject() })
+				.catch(() => {});
 		} catch {
 			// The WebView went away between the check and the post.
 		}
@@ -117,7 +134,11 @@ export function initSnapgentAgent(container) {
 	async function connectBridge() {
 		bridge?.close();
 		const token = ctx ? await ctx.getSecret(BRIDGE_TOKEN, "") : "";
-		bridge = new SnapgentBridge({ url: settings.bridgeUrl, token, onStatus: updateStatus });
+		bridge = new SnapgentBridge({
+			url: settings.bridgeUrl,
+			token,
+			onStatus: updateStatus,
+		});
 		try {
 			await bridge.connect();
 		} catch (error) {
@@ -126,7 +147,10 @@ export function initSnapgentAgent(container) {
 	}
 
 	async function approveTool(name, args) {
-		return confirm("Allow snapgent tool?", `${name}\n\n${JSON.stringify(args, null, 2)}`);
+		return confirm(
+			"Allow snapgent tool?",
+			`${name}\n\n${JSON.stringify(args, null, 2)}`,
+		);
 	}
 
 	// The page handler is created once and reads the live bridge through this
@@ -200,10 +224,17 @@ export function initSnapgentAgent(container) {
 		settings = { ...settings, providerId: providerSelect.value };
 		savePublicSettings(settings);
 	};
-	openButton.onclick = () => openProvider().catch((error) => toast(error.message || String(error), 4000));
+	openButton.onclick = () =>
+		openProvider().catch((error) =>
+			toast(error.message || String(error), 4000),
+		);
 	reconnectButton.onclick = () => connectBridge();
 	saveButton.onclick = async () => {
-		settings = { ...DEFAULT_SETTINGS, ...settings, bridgeUrl: bridgeUrl.value.trim() };
+		settings = {
+			...DEFAULT_SETTINGS,
+			...settings,
+			bridgeUrl: bridgeUrl.value.trim(),
+		};
 		savePublicSettings(settings);
 		if (ctx) await ctx.setSecret(BRIDGE_TOKEN, bridgeToken.value.trim());
 		await connectBridge();

@@ -68,6 +68,7 @@ public class NanoHTTPDWebserver extends NanoHTTPD {
     jsonRequest.put("method", session.getMethod());
     jsonRequest.put("path", session.getUri());
     jsonRequest.put("query", session.getQueryParameterString());
+    jsonRequest.put("remote", session.getRemoteIpAddress());
     return jsonRequest;
   }
 

@@ -56,6 +56,7 @@ import openFolder, { addedFolder } from "lib/openFolder";
 import { registerPrettierFormatter } from "lib/registerPrettierFormatter";
 import restoreFiles from "lib/restoreFiles";
 import settings from "lib/settings";
+import { startSnapgentControl } from "snapgentAgent/control";
 import { migrateLegacySftpProfiles } from "lib/sftpProfiles";
 import startAd, {
 	BANNER_SUPPRESSION_REASON,
@@ -752,6 +753,10 @@ async function loadApp() {
 	//#endregion
 
 	notificationManager.init();
+	// The agent's acode_* MCP tools push actions into this app over a loopback
+	// endpoint. Start it with the app, not with the snapgent sidebar: an
+	// interrupt has to land even when the sidebar was never opened.
+	void startSnapgentControl();
 	window.log("info", "Started app and its services...");
 
 	if (!files.length) {

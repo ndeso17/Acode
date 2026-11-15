@@ -140,6 +140,19 @@
   }
 
   let selectedTargetId = "vscode";
+  // Editor targets run the MCP server inside an editor: VS Code on the desktop
+  // build, Acode on the Android build. They are the targets that need a
+  // verified workspace before a session starts and that can load workspace
+  // skills. Everything else (Roblox Studio, addons) is a plain MCP server.
+  const EDITOR_TARGET_IDS = ["vscode", "acode"];
+  function isEditorTarget(id = selectedTargetId) {
+    return EDITOR_TARGET_IDS.includes(id);
+  }
+  function editorWorkspaceHint(id = selectedTargetId) {
+    return id === "acode"
+      ? "Open a folder in Acode, then try again."
+      : "Open a project folder in VS Code, then try again.";
+  }
   try {
     chrome.storage.local.get(TARGET_STORAGE_KEY, (result) => {
       const saved = result && result[TARGET_STORAGE_KEY];
@@ -1047,12 +1060,14 @@
         .filter((sv) => sv.id === selectedTargetId && isMcpEnabled(sv.id));
       const lines = servers.length
         ? servers.map((sv) => {
-            const label = sv.id === "vscode"
-              ? "VS Code (default target)"
-              : sv.id === "roblox" ? "Roblox Studio" : `${sv.id} (addon)`;
+            const label = sv.id === "acode"
+              ? "Acode (editor target)"
+              : sv.id === "vscode"
+                ? "VS Code (editor target)"
+                : sv.id === "roblox" ? "Roblox Studio" : `${sv.id} (addon)`;
             return `- ${sv.id}: ${label} - ${sv.alive ? `${sv.tools || 0} commands available` : "offline (no tools)"}`;
           })
-        : ["- vscode: VS Code (default target) - unknown (bridge did not report server health)"];
+        : [`- ${selectedTargetId}: ${ui.getTargetName(selectedTargetId)} - unknown (bridge did not report server health)`];
       return (
         `Output of 'list_mcp_servers':\n` +
         `Connected MCP servers (${lines.length}):\n${lines.join("\n")}\n` +
@@ -2139,12 +2154,12 @@
                                // the model makes seconds later)
       if (!alive()) return;
       const selectedTools = activeTools();
-      const vscodeServer = (A.bridge && A.bridge.servers || []).find((server) => server.id === "vscode");
-      if (selectedTargetId === "vscode" && A.bridge && A.bridge.connected &&
-          vscodeServer && vscodeServer.alive &&
+      const editorServer = (A.bridge && A.bridge.servers || []).find((server) => server.id === selectedTargetId);
+      if (isEditorTarget() && A.bridge && A.bridge.connected &&
+          editorServer && editorServer.alive &&
           !selectedTools.some((tool) => bareToolName(tool.name) === "list_dir")) {
-        ui.banner("warn", "VS Code workspace required",
-          "Open a project folder in VS Code, then try again.");
+        ui.banner("warn", `${ui.getTargetName()} workspace required`,
+          editorWorkspaceHint());
         return;
       }
       if (!activeTools().length) {
@@ -2152,11 +2167,11 @@
           `Is the server online?`);
         return;
       }
-      if (selectedTargetId === "vscode") {
+      if (isEditorTarget()) {
         const workspaceTool = activeTools().find((tool) => bareToolName(tool.name) === "list_dir");
         if (!workspaceTool) {
-          ui.banner("warn", "VS Code workspace required",
-            "Open a project folder in VS Code, then try again.");
+          ui.banner("warn", `${ui.getTargetName()} workspace required`,
+            editorWorkspaceHint());
           return;
         }
         const probe = await bg({
@@ -2167,8 +2182,8 @@
         });
         if (!alive()) return;
         if (!probe || !probe.ok) {
-          ui.banner("warn", "VS Code workspace required",
-            "Open a project folder in VS Code, then try again.");
+          ui.banner("warn", `${ui.getTargetName()} workspace required`,
+            editorWorkspaceHint());
           return;
         }
       }
@@ -2179,7 +2194,7 @@
           `Try a new chat or reload.`);
         return;
       }
-      if (selectedTargetId === "vscode") await loadWorkspaceSkills();
+      if (isEditorTarget()) await loadWorkspaceSkills();
       if (!alive()) return;
       const prompt = systemPrompt();
       const base = await submitAndGetBase(prompt);
@@ -2925,6 +2940,7 @@
           <div class="zs-target-wrap" title="Choose which MCP server receives commands">
             <select id="zs-target" aria-label="MCP target" hidden tabindex="-1">
               <option value="vscode">VS Code</option>
+              <option value="acode">Acode</option>
               <option value="roblox">Roblox Studio</option>
             </select>
             <button id="zs-target-btn" type="button" aria-haspopup="listbox" aria-label="Choose MCP target"><span id="zs-target-name"></span></button>
@@ -3103,6 +3119,7 @@
     function getTargetName(id = selectedTargetId) {
       if (id === "roblox") return "Roblox Studio";
       if (id === "vscode") return "VS Code";
+      if (id === "acode") return "Acode";
       if (id === "effectcraft") return "EffectCraft";
       const server = mergedMcpServers().find((item) => item.id === id);
       return server ? server.name : id;
@@ -3113,11 +3130,12 @@
     function setTarget(id = selectedTargetId) {
       if (!targetSelect) return;
       const options = [
+        { id: "acode", name: "Acode" },
         { id: "vscode", name: "VS Code" },
         { id: "roblox", name: "Roblox Studio" },
         { id: "effectcraft", name: "EffectCraft" },
         ...mergedMcpServers()
-          .filter((server) => !["vscode", "roblox", "effectcraft"].includes(server.id))
+          .filter((server) => !["acode", "vscode", "roblox", "effectcraft"].includes(server.id))
           .map((server) => ({ id: server.id, name: getTargetName(server.id) })),
       ].filter((option) => isMcpEnabled(option.id));
       if (!options.some((option) => option.id === id)) {
@@ -3187,6 +3205,7 @@
     // ── MCP settings popup (toggle which servers are enabled) ───────────────
     function allMcpOptions() {
       const base = [
+        { id: "acode", name: "Acode" },
         { id: "vscode", name: "VS Code" },
         { id: "roblox", name: "Roblox Studio" },
         { id: "effectcraft", name: "EffectCraft" },
@@ -3348,7 +3367,7 @@
       pop.addEventListener("click", (e) => { if (e.target === pop) pop.remove(); });
       document.documentElement.appendChild(pop);
       render();
-      if (selectedTargetId === "vscode") loadWorkspaceSkills().then(() => { if (pop.isConnected) render(); });
+      if (isEditorTarget()) loadWorkspaceSkills().then(() => { if (pop.isConnected) render(); });
     }
 
     function buildMenu() {
@@ -3552,21 +3571,21 @@
         // that is actually empty and startable. "No agent here" is only correct for
         // an EXISTING conversation (one that has turns) we did not start.
         const selectedServer = (A.bridge.servers || []).find((item) => item.id === selectedTargetId);
-        const vscodeWorkspaceMissing = selectedTargetId === "vscode" &&
+        const editorWorkspaceMissing = isEditorTarget() &&
           !!A.bridge.connected && !!selectedServer && !!selectedServer.alive &&
           !(selectedServer.tools > 0);
         if (selectedTargetId !== "roblox" &&
-            (!bridgeOk || (selectedTargetId === "vscode" && !workspaceReady))) {
+            (!bridgeOk || (isEditorTarget() && !workspaceReady))) {
           toneClass = "warn"; warn = true;
           msg = !A.bridge.connected
             ? `Run <b>start.bat</b>`
-            : selectedTargetId === "vscode" && (bridgeOk || vscodeWorkspaceMissing)
+            : isEditorTarget() && (bridgeOk || editorWorkspaceMissing)
               ? workspaceProbePending
-                ? `Checking <b>VS Code workspace</b>…`
-                : `Open a <b>folder in VS Code</b>`
+                ? `Checking <b>${targetNameHtml()} workspace</b>…`
+                : `Open a <b>folder in ${targetNameHtml()}</b>`
               : `<b>${targetNameHtml()} unavailable</b>`;
           label = `▶︎ Start`; kind = "start"; disabled = true;
-        } else if (bridgeOk && (selectedTargetId !== "vscode" || workspaceReady)) {
+        } else if (bridgeOk && (!isEditorTarget() || workspaceReady)) {
           toneClass = "standby";
           msg = `Ready.`;
           label = `▶︎ Start`; kind = "start";
@@ -3657,10 +3676,28 @@
     function setStarted() { renderBar(); }
     function setStarting() { renderBar(); }
 
+    // The default target is VS Code (the desktop build's editor). The Android
+    // build has no VS Code MCP server - its host aliases the phone's "android"
+    // server to the Acode editor target - so an existing/default selection used
+    // to sit on "VS Code unavailable" forever. Heal that specific mismatch only:
+    // never jump from VS Code to Roblox or an arbitrary addon.
+    function healMissingEditorTarget(servers) {
+      if (selectedTargetId !== "vscode" || !servers.length) return;
+      if (servers.some((item) => item.id === "vscode" && isMcpEnabled("vscode"))) return;
+      const next = servers.find((item) => item.id === "acode" && isMcpEnabled("acode"));
+      if (!next) return;
+      selectedTargetId = next.id;
+      try { chrome.storage.local.set({ [TARGET_STORAGE_KEY]: selectedTargetId }); } catch {}
+      refreshActiveToolNames();
+      setTarget(selectedTargetId);
+      diag("target.healed", { id: selectedTargetId });
+    }
+
     function setStatus(s) {
       A.bridge = s;
       if (!bar) return;
       const servers = s.servers || [];
+      healMissingEditorTarget(servers);
       if (selectedTargetId !== "roblox") {
         const selected = servers.find((item) => item.id === selectedTargetId);
         const serverConnected = !!s.connected && !!selected && !!selected.alive;
@@ -3680,7 +3717,7 @@
           setupSeen = true;
           try { chrome.storage.local.set({ zsSetupSeen: true }); } catch {}
         }
-        if (selectedTargetId === "vscode" && serverConnected && !workspaceProbePending &&
+        if (isEditorTarget() && serverConnected && !workspaceProbePending &&
             Date.now() - workspaceProbeAt >= 5000) {
           workspaceProbeAt = Date.now();
           workspaceProbePending = true;
@@ -3702,12 +3739,12 @@
             });
           }).catch((error) => {
             workspaceReady = false;
-            console.warn("[snapgentV3] Could not verify VS Code workspace:", error);
+            console.warn(`[snapgentV3] Could not verify ${ui.getTargetName()} workspace:`, error);
           }).finally(() => {
             workspaceProbePending = false;
             renderBar();
           });
-        } else if (selectedTargetId === "vscode" && !serverConnected) {
+        } else if (isEditorTarget() && !serverConnected) {
           workspaceReady = false;
         }
         renderBar();

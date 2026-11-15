@@ -35,13 +35,39 @@ Acode sidebar (provider picker, bridge settings)
   -> Acode host validates them (type allow-list, tool-name allow-list, approval)
   -> native Cordova WebSocket, authenticated with the bridge token
   -> snapgent bridge at ws://127.0.0.1:17613
-  -> android_mcp.py workspace tools
+  -> android_mcp.py workspace + Acode control tools
+       -> authenticated loopback Acode control endpoint (interrupts)
+       -> open/focus a changed file, run an allowed editor command, or notify
   -> tool result fed back into the website chat
 ```
 
 The provider page never sees the bridge token. Only the Acode host owns the
 socket, and it accepts only `status`, `list_tools`, `call_tool`, and `reconnect`
 from the page.
+
+### Acode target and interrupts
+
+The Android bridge still calls its MCP process `android`, but the built-in host
+presents it to the provider as the **Acode** target (`acode`). Tool calls are
+mapped back to `android` before crossing the authenticated bridge. When an old
+profile still has the desktop default `vscode` selected and the bridge reports
+only the Android server, the target heals to Acode automatically. This prevents
+the stale **VS Code unavailable** state without overriding a target the user
+selected deliberately.
+
+Acode starts an authenticated loopback control endpoint during app startup, even
+if the snapgent sidebar has never been opened. It publishes a random per-launch
+token and port in `/storage/emulated/0/.snapgent/acode-control.json`; the token is
+required on every request. `android_mcp.py` exposes four editor-facing tools:
+
+- `acode_status` checks that the running editor can receive an interrupt;
+- `acode_open_file` opens/focuses a workspace file, optionally at a line/column;
+- `acode_run_command` runs a small allow-list of editor commands;
+- `acode_notify` shows a toast or alert inside Acode.
+
+The control endpoint accepts loopback callers only. File paths are validated by
+the MCP workspace guard before Acode receives them, and an open tab with unsaved
+changes is never discarded by `acode_open_file`.
 
 ### Script injection
 
@@ -76,8 +102,9 @@ how to refresh them from the snapgent checkout.
 - The runtime message allow-list rejects anything else, including MCP server
   management (`add_server`, `remove_server`).
 - Every `call_tool` name must exist in the live bridge catalogue.
-- Read-only tools (`read_file`, `list_directory`, `search_files`, …) run
-  directly. Everything else asks for confirmation first.
+- Read-only tools (`read_file`, `list_dir`, `search_files`, `acode_status`, …)
+  run directly. Mutating, device-control, and active Acode interrupt tools ask
+  for confirmation first.
 - The bridge remains the workspace security boundary: its `ZS_WORKSPACE` setting
   controls which files the agent can reach.
 

@@ -38,7 +38,7 @@ the official `com.foxdebug.acode`.
 
 - [ ] Paste the bridge token from `bridge.py`, tap **Save bridge settings**.
 - [ ] The dot in the panel header turns green and the tooltip shows the bridge
-      version and tool count (36 tools for the `android` server).
+      version and tool count (40 tools for the `android` server).
 - [ ] Stop `bridge.py`, tap **Reconnect bridge**: the dot turns red and the
       tooltip shows the connection error. Restart the bridge and reconnect
       again — green.
@@ -50,6 +50,9 @@ the official `com.foxdebug.acode`.
 - [ ] Sign in. The `snapgent` WebView profile keeps the cookie, so reopening the
       agent stays logged in.
 - [ ] The snapgent bar appears in the page and reports `ext v3.9.5`.
+- [ ] The target button says **Acode**, not **VS Code unavailable**. If this is an
+      upgrade from an older build, the default target switches to Acode as soon
+      as the bridge server list arrives.
 - [ ] Repeat for at least one second provider (e.g. DeepSeek, Kimi, GLM).
 - [ ] Known failure: Gemini's Google OAuth usually refuses an embedded WebView.
       Use email/password if offered, otherwise test with another provider.
@@ -66,7 +69,23 @@ the official `com.foxdebug.acode`.
 - [ ] Confirm the system prompt and raw tool JSON never appear as visible chat
       text (the overlay CSS hides them behind the chips).
 
-## 5. Storage access
+## 5. Acode interrupt channel
+
+- [ ] With Acode open, ask the agent to call `acode_status`. The result reports
+      `app: Acode`, the active file, and the number of open files.
+- [ ] Ask the agent to edit an existing workspace file and then call
+      `acode_open_file` for that path and a line number. Approve the interrupt:
+      Acode brings the changed file to the front and scrolls to the requested
+      line.
+- [ ] Keep an unsaved edit in that tab and call `acode_open_file` again. The tab
+      is focused, but the unsaved buffer is not discarded.
+- [ ] Ask for `acode_notify` and approve it. The message appears inside Acode.
+- [ ] Close Acode and call `acode_status`: the tool returns a clear unreachable
+      error instead of claiming the interrupt was delivered.
+- [ ] Confirm `/storage/emulated/0/.snapgent/acode-control.json` contains only the
+      current loopback port and a random token; restarting Acode rotates it.
+
+## 6. Storage access
 
 - [ ] Open the file browser. On Android 11+ without all-files access, the list
       shows **Allow access to /storage/emulated/0** instead of *Internal
@@ -78,7 +97,7 @@ the official `com.foxdebug.acode`.
 - [ ] With all-files access **revoked** in system settings, the entry disappears
       again and no raw `file://` path is used.
 
-## 6. Folder picker (SAF)
+## 7. Folder picker (SAF)
 
 - [ ] Add a folder via *Add path* / the folder picker, choose a project
       subfolder (e.g. `Download/project`).
@@ -86,7 +105,7 @@ the official `com.foxdebug.acode`.
 - [ ] Picking the storage root `/storage/emulated/0` itself is refused by
       Android on 11+ — that is expected; use all-files access for the root.
 
-## 7. Coexistence
+## 8. Coexistence
 
 - [ ] The official Acode (`com.foxdebug.acode`) is still installed and launches.
 - [ ] Both apps keep separate settings, sidebars and WebView profiles.
