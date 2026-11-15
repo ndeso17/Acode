@@ -13,7 +13,7 @@ const docProvider = path.resolve(
 
 const repeatChar = (char, times) => char.repeat(times);
 
-function replaceImport(filePath, appName) {
+function replaceImport(filePath, packageName) {
   if (!fs.existsSync(filePath)) {
     console.warn(`⚠ File not found: ${filePath}`);
     return;
@@ -22,8 +22,8 @@ function replaceImport(filePath, appName) {
   const data = fs.readFileSync(filePath, "utf8");
 
   const updated = data.replace(
-    /(import\s+com\.foxdebug\.)(acode|acodefree)(\.R;)/,
-    `$1${appName}$3`
+    /import\s+[a-zA-Z0-9_.]+\.R;/,
+    `import ${packageName}.R;`
   );
 
   fs.writeFileSync(filePath, updated);
@@ -41,12 +41,12 @@ try {
     throw new Error("Could not extract widget id from config.xml");
   }
 
-  const appName = match[1].split(".").pop();
+  const packageName = match[1];
 
-  replaceImport(docProvider, appName);
-  replaceImport(menuJava, appName);
+  replaceImport(docProvider, packageName);
+  replaceImport(menuJava, packageName);
 
-  const msg = `==== Changed package to com.foxdebug.${appName} ====`;
+  const msg = `==== Changed package to ${packageName} ====`;
 
   console.log("\n" + repeatChar("=", msg.length));
   console.log(msg);

@@ -33,6 +33,11 @@ import _addMenu from "./add-menu.hbs";
 import _addMenuHome from "./add-menu-home.hbs";
 import _template from "./fileBrowser.hbs";
 import _list from "./list.hbs";
+import {
+	normalizeStorageUrl,
+	resolveStorageUrl,
+	shouldShowInternalStorage,
+} from "./storageEntry";
 import util from "./util";
 
 /**
@@ -1000,6 +1005,26 @@ function FileBrowserInclude(mode, info, doesOpenLast = true) {
 						addStorage();
 						break;
 
+					case "storage-manager": {
+						const resumeHandler = () => {
+							document.removeEventListener("resume", resumeHandler);
+							reload();
+						};
+						document.addEventListener("resume", resumeHandler);
+						if (typeof window.system?.requestStorageManager !== "function") {
+							alert(
+								"All files access",
+								"Open Android settings > Apps > Acode + snapgent > Special app access > All files access and enable it.",
+							);
+							break;
+						}
+						window.system.requestStorageManager(
+							() => {},
+							(error) => console.error("Could not open all-files settings", error),
+						);
+						break;
+					}
+
 					default:
 						break;
 				}
@@ -1337,9 +1362,22 @@ function FileBrowserInclude(mode, info, doesOpenLast = true) {
 			handleClick(e, true);
 		}
 
+		async function hasAllFilesAccess() {
+			if (ANDROID_SDK_INT < 30) return true;
+			const api = window.system;
+			if (typeof api?.hasGrantedStorageManager !== "function") return false;
+			try {
+				const granted = await helpers.promisify(api.hasGrantedStorageManager);
+				return String(granted) === "true";
+			} catch {
+				return false;
+			}
+		}
+
 		async function listAllStorages() {
 			let hasInternalStorage = true;
 			allStorages.length = 0;
+			const hasStorageManager = await hasAllFilesAccess();
 
 			if (ANDROID_SDK_INT === 29) {
 				const rootDirName = cordova.file.externalRootDirectory;
@@ -1360,13 +1398,32 @@ function FileBrowserInclude(mode, info, doesOpenLast = true) {
 				hasInternalStorage = false;
 			}
 
-			if (hasInternalStorage) {
+			if (
+				shouldShowInternalStorage({
+					sdkInt: ANDROID_SDK_INT,
+					hasInternalStorage,
+					hasStorageManager,
+				})
+			) {
 				util.pushFolder(
 					allStorages,
 					"Internal storage",
 					cordova.file.externalRootDirectory,
 					{
 						uuid: "internal-storage",
+					},
+				);
+			} else if (ANDROID_SDK_INT >= 30) {
+				// Android 11+ hides shared storage until all-files access is
+				// granted, and SAF cannot grant /storage/emulated/0 itself.
+				util.pushFolder(
+					allStorages,
+					"Allow access to /storage/emulated/0",
+					"",
+					{
+						storageType: "notification",
+						uuid: "storage-manager",
+						notSelectable: true,
 					},
 				);
 			}
@@ -1405,13 +1462,19 @@ function FileBrowserInclude(mode, info, doesOpenLast = true) {
 
 			try {
 				const res = await externalFs.listStorages();
+				const seen = new Set(
+					allStorages.map((storage) => normalizeStorageUrl(storage.url)),
+				);
 				res.forEach((storage) => {
 					if (storageList.find((s) => s.uuid === storage.uuid)) return;
-					let path;
-					if (storage.path && isStorageManager) {
-						path = "file://" + storage.path;
-					}
-					util.pushFolder(allStorages, storage.name, path || "", {
+					const path = resolveStorageUrl(storage, hasStorageManager);
+					// With all-files access the primary volume resolves to the same
+					// path as the synthetic "Internal storage" entry, so it is
+					// skipped instead of listed twice.
+					const key = normalizeStorageUrl(path);
+					if (key && seen.has(key)) return;
+					if (key) seen.add(key);
+					util.pushFolder(allStorages, storage.name, path, {
 						...storage,
 						storageType: "sd",
 					});

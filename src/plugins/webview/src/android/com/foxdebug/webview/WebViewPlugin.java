@@ -72,6 +72,16 @@ public class WebViewPlugin extends CordovaPlugin {
         case "postMessage":
           postMessage(args.getString(0), args.getString(1), callbackContext);
           return true;
+        case "enableSnapgentProvider": {
+          WebViewInstance snapgentInstance = requireInstance(
+            args.getString(0),
+            callbackContext
+          );
+          if (snapgentInstance == null) return true;
+          snapgentInstance.enableSnapgentProvider();
+          callbackContext.success();
+          return true;
+        }
         case "show":
           show(args.getString(0), callbackContext);
           return true;

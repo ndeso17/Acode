@@ -1,11 +1,11 @@
 <?xml version='1.0' encoding='utf-8'?>
-<widget id="com.foxdebug.acode" android-versionCode="1011" version="1.13.5"
+<widget id="com.snapgent.acode" android-versionCode="1011" version="1.13.5"
     xmlns="http://www.w3.org/ns/widgets"
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:cdv="http://cordova.apache.org/ns/1.0">
-    <name>Acode</name>
+    <name>Acode + snapgent</name>
     <description>
-        Light weight code editor and web IDE for android.
+        Acode editor with the snapgent coding agent built in.
     </description>
     <author email="ajit@foxdebug.com" href="https://foxdebug.com">
         Foxdebug
@@ -324,6 +324,9 @@
             <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
             <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
             <uses-permission android:name="android.permission.WRITE_MEDIA_STORAGE" />
+            <!-- Needed to browse and manage /storage/emulated/0 directly on
+                 Android 11+. SAF alone cannot grant the shared-storage root. -->
+            <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />
             <uses-permission android:name="android.permission.VIBRATE" />
         </config-file>
 

@@ -383,6 +383,16 @@ export class AcodeWebView {
 		await nativeBridge.postMessage(this.id, message);
 	}
 
+	/**
+	 * Enables snapgent provider mode for this instance: the bundled extension
+	 * scripts are injected on allow-listed AI hosts. Must be called before
+	 * loadURL() so the document-start scripts cover the first navigation.
+	 */
+	async enableSnapgentProvider() {
+		this._checkDestroyed();
+		await nativeBridge.enableSnapgentProvider(this.id);
+	}
+
 	async reload() {
 		this._checkDestroyed();
 		await nativeBridge.reload(this.id);

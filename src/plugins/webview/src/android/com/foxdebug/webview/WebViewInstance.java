@@ -149,6 +149,12 @@ public class WebViewInstance {
   private ScriptHandler documentStartScript = null;
   private long lastScrollEventAt = 0L;
 
+  /** snapgent provider mode: inject the bundled extension scripts on matching hosts. */
+  private boolean snapgentEnabled = false;
+  private final Set<ScriptHandler> snapgentStartScripts = new HashSet<>();
+  private boolean snapgentStartScriptsRegistered = false;
+  private String snapgentCommonScript = "";
+
   WebViewInstance(String id, WebViewOptions options, WebViewPlugin plugin) {
     this.id = id;
     this.options = options;
@@ -209,6 +215,7 @@ public class WebViewInstance {
     options.applyTo(webView, activity);
     configureClients(activity);
     installBridge();
+    registerSnapgentStartScripts();
     applyPendingContent();
     Payload ready = data()
       .put("mode", options.mode)
@@ -311,6 +318,93 @@ public class WebViewInstance {
 
   private static void injectBridge(WebView view) {
     view.evaluateJavascript(BRIDGE_JS, null);
+  }
+
+  // ---------------------------------------------------------------------------
+  // snapgent provider mode
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Enables snapgent provider mode: on allow-listed AI websites the bundled
+   * extension scripts run in the page, driving the site through its own
+   * logged-in session instead of an API key.
+   *
+   * <p>Call this before loadURL so the document-start scripts are registered
+   * for the first navigation.
+   */
+  void enableSnapgentProvider() {
+    snapgentEnabled = true;
+    snapgentCommonScript = SnapgentAssets.commonScript(plugin.getContext());
+    if (webView != null) {
+      runOnUiThread(this::registerSnapgentStartScripts);
+    }
+  }
+
+  boolean isSnapgentEnabled() {
+    return snapgentEnabled;
+  }
+
+  private void registerSnapgentStartScripts() {
+    if (!snapgentEnabled || webView == null || snapgentStartScriptsRegistered) return;
+    snapgentStartScriptsRegistered = true;
+
+    if (!WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) {
+      Log.w(
+        TAG,
+        "Document-start scripts unavailable; snapgent shim is injected on page finished"
+      );
+      return;
+    }
+
+    try {
+      addSnapgentStartScript(snapgentCommonScript, SnapgentAssets.allOrigins());
+      for (String provider : SnapgentAssets.providers()) {
+        String script = SnapgentAssets.documentStartProviderScript(
+          plugin.getContext(),
+          provider
+        );
+        if (script == null || script.trim().isEmpty()) continue;
+        addSnapgentStartScript(script, SnapgentAssets.originsFor(provider));
+      }
+    } catch (Throwable t) {
+      Log.w(TAG, "Could not register snapgent document-start scripts", t);
+    }
+  }
+
+  private void addSnapgentStartScript(String script, Set<String> origins) {
+    if (script == null || script.isEmpty() || origins == null || origins.isEmpty()) {
+      return;
+    }
+    ScriptHandler handler = WebViewCompat.addDocumentStartJavaScript(
+      webView,
+      script,
+      origins
+    );
+    if (handler != null) snapgentStartScripts.add(handler);
+  }
+
+  /**
+   * Injects the agent core once the page is usable. The provider page itself is
+   * never trusted with the bridge token: every chrome.runtime message goes back
+   * to the Acode host, which validates it.
+   *
+   * <p>The chrome.* shim is prepended even when document-start scripts are
+   * available, because it is idempotent (state lives on window.__zsShimState)
+   * and this guarantees the core finds the API in the same world it runs in.
+   */
+  private void injectSnapgentScripts(WebView view) {
+    if (!snapgentEnabled) return;
+
+    String provider = SnapgentAssets.providerForUrl(view.getUrl());
+    if (provider == null) return;
+
+    String idle = SnapgentAssets.documentIdleScript(plugin.getContext(), provider);
+    if (idle.isEmpty()) return;
+
+    StringBuilder payload = new StringBuilder();
+    payload.append(snapgentCommonScript).append("\n;\n");
+    payload.append(idle);
+    view.evaluateJavascript(payload.toString(), null);
   }
 
   private void applyPendingContent() {
@@ -712,6 +806,16 @@ public class WebViewInstance {
         documentStartScript = null;
       }
 
+      for (ScriptHandler handler : snapgentStartScripts) {
+        try {
+          handler.remove();
+        } catch (Throwable t) {
+          Log.w(TAG, "Could not remove snapgent document-start script", t);
+        }
+      }
+      snapgentStartScripts.clear();
+      snapgentStartScriptsRegistered = false;
+
       if (webView != null) {
         // On providers without multi-profile support, incognito can at least
         // drop the shared HTTP cache and saved form data.
@@ -755,6 +859,7 @@ public class WebViewInstance {
     // Navigation replaced the page's JS context, so re-inject (no-op when the
     // document-start script is already installed).
     injectBridge(view);
+    injectSnapgentScripts(view);
     String url = view.getUrl();
     currentUrl = url != null ? url : "";
     String pageTitle = view.getTitle();

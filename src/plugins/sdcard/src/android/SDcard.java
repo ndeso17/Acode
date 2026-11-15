@@ -54,6 +54,8 @@ public class SDcard extends CordovaPlugin {
   private final int OPEN_DOCUMENT = 6002;
   private final int PICK_FROM_GALLERY = 6003;
   private final String SEPARATOR = "::";
+  /** Synthetic uuid for primary shared storage, which reports a null uuid. */
+  private static final String PRIMARY_UUID = "primary";
   private StorageManager storageManager;
   private Context context;
   private Activity activity;
@@ -294,14 +296,19 @@ public class SDcard extends CordovaPlugin {
           String name = volume.getDescription(this.context);
           String uuid = volume.getUuid();
           JSONObject volumeData = new JSONObject();
-          if (name != null && uuid != null) {
-            volumeData.put("uuid", uuid);
+          // Primary emulated storage reports a null UUID on most devices.
+          // Dropping it hides /storage/emulated/0 from the file browser, so it
+          // gets a stable synthetic id instead.
+          if (name != null) {
+            volumeData.put("uuid", uuid != null ? uuid : PRIMARY_UUID);
             volumeData.put("name", name);
+            volumeData.put("primary", volume.isPrimary());
 
             if (SDK_INT >= 30) {
               File file = volume.getDirectory();
-              String path = file.getAbsolutePath();
-              volumeData.put("path", path);
+              if (file != null) {
+                volumeData.put("path", file.getAbsolutePath());
+              }
             }
 
             result.put(volumeData);
@@ -319,6 +326,8 @@ public class SDcard extends CordovaPlugin {
           volumeData.put("name", name);
           volumeData.put("path", path);
           volumeData.put("absolutePath", absolutePath);
+          volumeData.put("uuid", PRIMARY_UUID);
+          volumeData.put("primary", true);
           result.put(volumeData);
         }
       }
@@ -337,8 +346,12 @@ public class SDcard extends CordovaPlugin {
 
       for (StorageVolume volume : this.storageManager.getStorageVolumes()) {
         String uuid = volume.getUuid();
-        if (uuid != null && uuid.equals(SDCardUUID)) {
+        boolean matches = uuid != null
+          ? uuid.equals(SDCardUUID)
+          : PRIMARY_UUID.equals(SDCardUUID) && volume.isPrimary();
+        if (matches) {
           sdCard = volume;
+          break;
         }
       }
 

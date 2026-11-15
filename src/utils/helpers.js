@@ -6,6 +6,7 @@ import config from "lib/config";
 import fileIcons from "lib/fileIcons";
 import { interstitialAd, requestBannerForPage } from "lib/startAd";
 import { isBinaryFile } from "./binaryExtensions";
+import { isAcodeDocumentsUri } from "./documentsAuthority";
 import { isPlayStoreInstall } from "./installSource";
 import path from "./Path";
 import Uri from "./Uri";
@@ -398,9 +399,7 @@ export default {
 			"com.android.externalstorage.documents",
 		);
 		const isTermuxUri = currentUri.includes("com.termux.documents");
-		const isAcodeTerminalPublicSafUri = currentUri.includes(
-			"com.foxdebug.acode.documents",
-		);
+		const isAcodeTerminalPublicSafUri = isAcodeDocumentsUri(currentUri);
 		const [, treeSegment = ""] = currentUri.split("/tree/");
 		const terminalBasePath = isAcodeTerminalPublicSafUri
 			? decodeURIComponent(treeSegment.split("::")[0] || "")

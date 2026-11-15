@@ -28,6 +28,9 @@
     <source-file src="src/android/com/foxdebug/webview/WebViewActivity.java" target-dir="src/com/foxdebug/webview"/>
     <source-file src="src/android/com/foxdebug/webview/WebViewOptions.java" target-dir="src/com/foxdebug/webview"/>
     <source-file src="src/android/com/foxdebug/webview/ProfileManager.java" target-dir="src/com/foxdebug/webview"/>
+    <source-file src="src/android/com/foxdebug/webview/SnapgentAssets.java" target-dir="src/com/foxdebug/webview"/>
+
+    <resource-file src="assets/snapgent" target="assets/snapgent" />
 
   </platform>
 </plugin>

@@ -78,6 +78,10 @@ function postMessage(id, message) {
 	return invoke("postMessage", [id, payload]);
 }
 
+function enableSnapgentProvider(id) {
+	return invoke("enableSnapgentProvider", [id]);
+}
+
 function show(id) {
 	return invoke("show", [id]);
 }
@@ -154,6 +158,7 @@ export default {
 	loadHTML,
 	evaluate,
 	postMessage,
+	enableSnapgentProvider,
 	show,
 	hide,
 	reload,

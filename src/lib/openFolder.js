@@ -14,6 +14,7 @@ import escapeStringRegexp from "escape-string-regexp";
 import tag from "html-tag-js";
 import fileIcons from "lib/fileIcons";
 import copyEntry from "utils/copyEntry";
+import { isAcodeDocumentsTreeUri } from "utils/documentsAuthority";
 import { isExcludedFileOperationPath } from "utils/fileOperationExclusions";
 import helpers from "utils/helpers";
 import Path from "utils/Path";
@@ -28,8 +29,7 @@ import appSettings from "./settings";
 
 const isTermuxSafUri = (value = "") =>
 	value.startsWith("content://com.termux.documents/tree/");
-const isAcodeTerminalPublicSafUri = (value = "") =>
-	value.startsWith("content://com.foxdebug.acode.documents/tree/");
+const isAcodeTerminalPublicSafUri = (value = "") => isAcodeDocumentsTreeUri(value);
 const isTerminalSafUri = (value = "") =>
 	isTermuxSafUri(value) || isAcodeTerminalPublicSafUri(value);
 
