@@ -2,7 +2,6 @@ import fsOperation from "fileSystem";
 import toast from "components/toast";
 import alert from "dialogs/alert";
 import acode from "lib/acode";
-import editorManager from "lib/editorManager";
 import openFile from "lib/openFile";
 
 /**
@@ -30,6 +29,24 @@ const CONTROL_DIR = "file:///storage/emulated/0/.snapgent";
 const CONTROL_FILE = `${CONTROL_DIR}/acode-control.json`;
 const CONTROL_FILE_NAME = "acode-control.json";
 const PRIMARY_STORAGE = "file:///storage/emulated/0";
+
+/**
+ * The editor manager instance.
+ *
+ * `lib/editorManager` default-exports the EditorManager FACTORY, and the instance
+ * only exists after main.js has awaited it (main.js: `await EditorManager(...)`,
+ * then `window.editorManager = editorManager`). Importing the factory here and
+ * calling `.getFile()` on it threw
+ *
+ *   editorManager.getFile is not a function
+ *
+ * at runtime while looking perfectly valid in review, because the factory itself
+ * has no such method. Reading it off the global at call time is what the rest of
+ * Acode does as well.
+ */
+function getEditorManager() {
+	return globalThis.editorManager || null;
+}
 
 function randomToken() {
 	const bytes = new Uint8Array(24);
@@ -85,7 +102,7 @@ function toFileUrl(path) {
 
 function activeFilePath() {
 	try {
-		return editorManager.activeFile?.uri || "";
+		return getEditorManager()?.activeFile?.uri || "";
 	} catch {
 		return "";
 	}
@@ -99,7 +116,7 @@ async function openInEditor(body) {
 	// Re-opening a file the user already has open only makes its tab active, so
 	// an edit made by the agent would stay invisible. Drop the stale tab first -
 	// but never throw away unsaved changes the user is holding.
-	const existing = editorManager.getFile(uri, "uri");
+	const existing = getEditorManager()?.getFile(uri, "uri");
 	if (existing && body.reload !== false && !existing.isUnsaved) {
 		// Pinned tabs cannot be removed through the normal user path. This is an
 		// internal reload of the same file, so bypass the pin guard without ever
@@ -111,7 +128,7 @@ async function openInEditor(body) {
 
 	const line = Number(body.line);
 	if (Number.isFinite(line) && line > 0) {
-		const editor = editorManager.editor;
+		const editor = getEditorManager()?.editor;
 		if (editor?.state?.doc) {
 			const doc = editor.state.doc;
 			const target = Math.max(1, Math.min(doc.lines, Math.trunc(line)));
@@ -127,7 +144,7 @@ async function openInEditor(body) {
 		}
 	}
 	try {
-		editorManager.editor?.focus?.();
+		getEditorManager()?.editor?.focus?.();
 	} catch {}
 
 	return {
@@ -217,7 +234,7 @@ async function handleRequest(server, state, request) {
 					ok: true,
 					app: "Acode",
 					activeFile: activeFilePath(),
-					openFiles: editorManager.files?.length || 0,
+					openFiles: getEditorManager()?.files?.length || 0,
 				});
 			case "/acode/open": {
 				const result = await openInEditor(body || {});
