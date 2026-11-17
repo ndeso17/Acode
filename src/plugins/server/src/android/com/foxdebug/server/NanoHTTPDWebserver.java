@@ -59,12 +59,48 @@ public class NanoHTTPDWebserver extends NanoHTTPD {
    * @param session
    * @return
    */
+  /**
+   * Build a JSONObject out of the request headers.
+   *
+   * JSONObject.put(String, Object) keeps the object as-is and only serialises it
+   * later, so a Map lands in the JSON that reaches the webview as a STRING:
+   *
+   *   "headers": "{x-snapgent-token=..., content-type=application/json, ...}"
+   *
+   * Every consumer then does headers["x-snapgent-token"], gets undefined and
+   * reports a credential failure - the snapgent control channel answered 401 to
+   * every correct token because of exactly this. Header NAMES ARE
+   * CASE-INSENSITIVE per RFC 7230, so they are folded to lower case here: the
+   * lookup in JS is written against lower case, and a client is free to send
+   * "X-Snapgent-Token".
+   */
+  private JSONObject headersToJSON(Map<String, String> headers) {
+    JSONObject jsonHeaders = new JSONObject();
+    if (headers == null) {
+      return jsonHeaders;
+    }
+    for (Map.Entry<String, String> entry : headers.entrySet()) {
+      String name = entry.getKey();
+      if (name == null) {
+        continue;
+      }
+      try {
+        jsonHeaders.put(name.toLowerCase(java.util.Locale.ROOT), entry.getValue());
+      } catch (JSONException e) {
+        // put() only throws on a null/NaN value or a non-finite number; a header
+        // with a null value is simply skipped rather than failing the request.
+        Log.w("NanoHTTPDWebserver", "skipping unusable header " + name);
+      }
+    }
+    return jsonHeaders;
+  }
+
   private JSONObject createJSONRequest(String requestId, IHTTPSession session)
     throws JSONException {
     JSONObject jsonRequest = new JSONObject();
     jsonRequest.put("requestId", requestId);
     jsonRequest.put("body", this.getBodyText(session));
-    jsonRequest.put("headers", session.getHeaders());
+    jsonRequest.put("headers", this.headersToJSON(session.getHeaders()));
     jsonRequest.put("method", session.getMethod());
     jsonRequest.put("path", session.getUri());
     jsonRequest.put("query", session.getQueryParameterString());
